@@ -2,8 +2,39 @@ from fastapi import FastAPI
 from prometheus_client import Counter, Histogram, generate_latest
 from starlette.responses import Response
 import time
+import os
+import psycopg2
+import redis
+
 
 app = FastAPI()
+
+pg_conn = None
+redis_client = None
+
+
+def init_connections():
+    global pg_conn, redis_client
+
+    if pg_conn is None:
+        pg_conn = psycopg2.connect(
+            host=os.getenv("POSTGRES_HOST"),
+            port=os.getenv("POSTGRES_PORT"),
+            dbname=os.getenv("POSTGRES_DB"),
+            user=os.getenv("POSTGRES_USER"),
+            password=os.getenv("POSTGRES_PASSWORD"),
+        )
+
+    if redis_client is None:
+        redis_client = redis.Redis(
+            host=os.getenv("REDIS_HOST"),
+            port=int(os.getenv("REDIS_PORT")),
+            decode_responses=True,
+        )
+
+
+init_connections()
+
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -20,7 +51,27 @@ REQUEST_LATENCY = Histogram(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    pg_ok = False
+    redis_ok = False
+
+    try:
+        cur = pg_conn.cursor()
+        cur.execute("SELECT 1")
+        pg_ok = True
+    except Exception:
+        pass
+
+    try:
+        redis_client.ping()
+        redis_ok = True
+    except Exception:
+        pass
+
+    return {
+        "status": "ok" if pg_ok and redis_ok else "degraded",
+        "postgres": pg_ok,
+        "redis": redis_ok
+    }
 
 
 @app.get("/")
