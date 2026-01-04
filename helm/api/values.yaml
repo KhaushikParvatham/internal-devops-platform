@@ -1,0 +1,4 @@
+image:
+  repository: internal-devops-api
+  tag: dev
+  pullPolicy: IfNotPresent
