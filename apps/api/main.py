@@ -51,6 +51,7 @@ REQUEST_LATENCY = Histogram(
 
 @app.get("/health")
 def health():
+    REQUEST_COUNT.labels(method="GET", endpoint="/health").inc()
     pg_ok = False
     redis_ok = False
 
@@ -59,13 +60,13 @@ def health():
         cur.execute("SELECT 1")
         pg_ok = True
     except Exception:
-        pass
+        pg_ok = False
 
     try:
         redis_client.ping()
         redis_ok = True
     except Exception:
-        pass
+        redis_ok = False
 
     return {
         "status": "ok" if pg_ok and redis_ok else "degraded",
@@ -76,6 +77,7 @@ def health():
 
 @app.get("/")
 def root():
+    REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
     return {"message": "Internal DevOps Platform API"}
 
 
@@ -88,5 +90,6 @@ def metrics():
 def slow():
     start = time.time()
     time.sleep(1)
+    REQUEST_COUNT.labels(method="GET", endpoint="/slow").inc()
     REQUEST_LATENCY.labels(endpoint="/slow").observe(time.time() - start)
     return {"message": "slow response"}
